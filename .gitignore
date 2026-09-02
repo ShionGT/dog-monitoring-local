@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+.Python
+venv/
+env/
+.env
+*.log
+
+# Captured images / media (do not commit the dog's photos)
+captures/
+media/
+*.jpg
+*.jpeg
+*.png
+*.mp4
+*.avi
+
+# Local config with secrets
+config.yaml
+*.local.yaml
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+
+# Test / coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+Project_ Secure Raspberry Pi Dog Monitoring System.md
