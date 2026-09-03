@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1">
+      <title>{{ code }} — {{ message }}</title>
+      <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body class="body--error">
+      <div class="error-card">
+           <h1 class="error-code">{{ code }}</h1>
+           <p class="error-msg">{{ message }}</p>
+           <a class="btn btn--primary" href="{{ url_for('pages.dashboard') }}">Back to Dashboard</a>
+      </div>
+</body>
+</html>

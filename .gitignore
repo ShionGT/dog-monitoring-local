@@ -1,15 +1,29 @@
-# Python
+# --- Python ---
 __pycache__/
 *.py[cod]
+*$py.class
 *.egg-info/
 .eggs/
 .Python
+build/
+dist/
+*.so
+
+# --- Virtual environments (CRITICAL: never commit these) ---
+.venv/
 venv/
 env/
-.env
-*.log
+.venv
+env/
 
-# Captured images / media (do not commit the dog's photos)
+# --- Local config / secrets ---
+.env
+.env.*
+*.local.yaml
+config.local.yaml
+*.local
+
+# --- Captured images / media (do not commit the dog's photos) ---
 captures/
 media/
 *.jpg
@@ -17,19 +31,24 @@ media/
 *.png
 *.mp4
 *.avi
+*.webp
 
-# Local config with secrets
-config.yaml
-*.local.yaml
-
-# OS / editor
+# --- OS / editor ---
 .DS_Store
+Thumbs.db
 .idea/
 .vscode/
+*.swp
+*.swo
 
-# Test / coverage
+# --- Test / coverage / tooling ---
 .pytest_cache/
 .coverage
+coverage.xml
 htmlcov/
+.mypy_cache/
+.ruff_cache/
 
+# --- The project requirements specification (kept locally, not version-controlled) ---
+# Remove this line if you want to track the spec in git.
 Project_ Secure Raspberry Pi Dog Monitoring System.md

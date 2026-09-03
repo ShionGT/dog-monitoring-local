@@ -1,0 +1,124 @@
+{#- Dashboard (landing page) for the Dog Monitoring System.
+  The context processor (app.py) injects:
+    monitoring_state  -- snapshot dict: state, label, description, led, last_change
+    dogmon_config      -- the Config object
+    viewer_count       -- number of active live viewers
+    csrf_token         -- session CSRF token for POST requests
+    is_mock           -- True when running in mock (mac) mode
+-#}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+     <meta charset="utf-8">
+     <meta name="viewport" content="width=device-width, initial-scale=1">
+     <title>Dog Monitor</title>
+     <link rel="preconnect" href="{{ url_for('static', filename='css/style.css') }}">
+     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+     <div class="app">
+          <header class="app__header">
+               <h1 class="app__title">🐕 DOG MONITOR</h1>
+               <span class="badge badge--{{ monitoring_state.state.lower() }}">
+                     <span class="badge__dot"></span>
+                     {{ monitoring_state.label }}
+                  </span>
+                  <a class="app__logout" href="{{ url_for('pages.logout') }}">Log out</a>
+          </header>
+
+          <main class="layout">
+               {#- Left: the camera feed -------------------------------------------------#}
+               <section class="feed" aria-label="Camera feed">
+                    <div class="feed__frame" data-state="{{ monitoring_state.state }}">
+                         {%- if monitoring_state.state == 'RED' -%}
+                         <img class="feed__video" src="{{ url_for('stream.live_mjpeg') }}"
+                              alt="Live camera feed" />
+                         {%- elif monitoring_state.state == 'YELLOW' -%}
+                         <div class="feed__placeholder">
+                              <p class="feed__msg">🔒 Private monitoring</p>
+                              <p class="feed__sub">Camera is active locally, but the
+                                    live feed is not shown to remote viewers.</p>
+                              <p class="feed__hint">Set the state to <strong>LIVE</strong>
+                                    to view the feed.</p>
+                         </div>
+                         {%- else -%}
+                         <div class="feed__placeholder">
+                              <p class="feed__msg">🟢 Camera Off</p>
+                              <p class="feed__sub">The camera is stopped. No frames are
+                                    being captured and no feed is available.</p>
+                              <p class="feed__hint">Set the state to <strong>PRIVATE</strong>
+                                    or <strong>LIVE</strong> to start the camera.</p>
+                         </div>
+                         {%- endif -%}
+                    </div>
+                    <div class="feed__status">
+                         <span class="feed__state" id="feedState">{{ monitoring_state.state }}</span>
+                         <span id="viewerCount">{{ viewer_count }}</span> viewer(s) watching
+                    </div>
+               </section>
+
+               {#- Right: system status + controls ---------------------------------------#}
+               <aside class="panel" aria-label="System status and controls">
+                    <section class="panel__block">
+                         <h2 class="panel__heading">System Status</h2>
+                         <ul class="states" id="states">
+                              <li class="state-item state-item--{{ 'active' if monitoring_state.state == 'RED' else '' }}"
+                                   data-state="RED">
+                                   <span class="state-item__dot state-item__dot--red"></span>
+                                   <span class="state-item__label">LIVE</span>
+                                   <span class="state-item__desc">Stream shown to viewers</span>
+                              </li>
+                              <li class="state-item state-item--{{ 'active' if monitoring_state.state == 'YELLOW' else '' }}"
+                                   data-state="YELLOW">
+                                   <span class="state-item__dot state-item__dot--yellow"></span>
+                                   <span class="state-item__label">PRIVATE</span>
+                                   <span class="state-item__desc">Camera on, no remote feed</span>
+                              </li>
+                              <li class="state-item state-item--{{ 'active' if monitoring_state.state == 'GREEN' else '' }}"
+                                   data-state="GREEN">
+                                   <span class="state-item__dot state-item__dot--green"></span>
+                                   <span class="state-item__label">OFF</span>
+                                   <span class="state-item__desc">Camera completely off</span>
+                              </li>
+                         </ul>
+                    </section>
+
+                    <section class="panel__block">
+                         <h2 class="panel__heading">Controls</h2>
+                         <div class="controls">
+                              <button class="btn btn--red"   data-target="RED">Start Live Stream</button>
+                              <button class="btn btn--yellow" data-target="YELLOW">Private Monitoring</button>
+                              <button class="btn btn--green" data-target="GREEN">Turn Camera Off</button>
+                         </div>
+                    </section>
+
+                    <section class="panel__block">
+                         <h2 class="panel__heading">Information</h2>
+                         <dl class="info">
+                              <dt>Camera</dt>
+                              <dd id="cameraStatus">{{ 'Mock (simulated)' if is_mock else 'Connected' }}</dd>
+                              <dt>Detection</dt>
+                              <dd id="detectionStatus">
+                                    {{ 'Enabled' if dogmon_config.motion_enabled else 'Disabled' }}
+                              </dd>
+                              <dt>Notifications</dt>
+                              <dd id="notifStatus">
+                                    {{ 'Discord' if dogmon_config.discord_webhook_url else 'Disabled' }}
+                              </dd>
+                              <dt>Last change</dt>
+                              <dd id="lastChange">{{ '—' if monitoring_state.last_change is none else '—' }}</dd>
+                              <dt>Source</dt>
+                              <dd id="lastSource">{{ '—' if monitoring_state.last_change is none else 'web' }}</dd>
+                         </dl>
+                    </section>
+               </aside>
+          </main>
+     </div>
+
+     <script>
+          // CSRF token for state-changing POSTs.
+          window.__CSRF__ = "{{ csrf_token }}";
+     </script>
+     <script defer src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>
