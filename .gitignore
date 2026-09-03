@@ -19,6 +19,7 @@ env/
 # --- Local config / secrets ---
 .env
 .env.*
+!.env.example
 *.local.yaml
 config.local.yaml
 *.local
