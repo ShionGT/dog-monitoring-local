@@ -155,7 +155,7 @@ dog-monitoring/
 ├── run.py                  # entry point (loads config, validates, runs)
 ├── requirements.txt        # runtime deps (Flask, Pillow, gpiozero, picamera2)
 ├── requirements-dev.txt    # + pytest
-├── .env.example            # documented, safe, git-ignored real .env
+├── .env.example            # documented, safe example config (copy to .env)
 ├── .gitignore
 │
 ├── dog_monitoring/
@@ -178,6 +178,7 @@ dog-monitoring/
 │
 ├── tests/                  # 77 unit tests (state, gpio, camera, api, …)
 ├── scripts/                # helper scripts (e.g. fix_indent.py)
+├── deploy/                 # dogmon.service — systemd unit for the Pi
 ├── docs/                   # architecture / hardware / deployment / security
 └── Project_ Secure Raspberry Pi Dog Monitoring System.md   # the requirements spec
 ```

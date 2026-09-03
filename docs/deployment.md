@@ -165,31 +165,13 @@ Then bind it through the systemd service below for auto-start on boot.
 
 ## 9. systemd service (auto-start on boot)
 
-Create the unit file:
+The unit file ships in the repo at [`deploy/dogmon.service`](../deploy/dogmon.service).
+Install it:
 
 ```bash
-sudo -S -p '' tee /etc/systemd/system/dogmon.service > /dev/null <<'UNIT'
-[Unit]
-Description=Dog Monitor (Raspberry Pi 5 camera monitoring)
-After=network-online.target
-Wants=network-online.target
-
-[Service]
-Type=simple
-User=pi
-WorkingDirectory=/opt/dogmon
-EnvironmentFile=/opt/dogmon/.env
-ExecStart=/opt/dogmon/.venv/bin/python /opt/dogmon/run.py
-Restart=on-failure
-RestartSec=3
-# Basic hardening
-NoNewPrivileges=true
-ProtectHome=false
-ProtectSystem=full
-
-[Install]
-WantedBy=multi-user.target
-UNIT
+sudo cp deploy/dogmon.service /etc/systemd/system/
+# If the app lives somewhere other than /opt/dogmon, or runs as a different
+# user, edit the User=/WorkingDirectory=/EnvironmentFile= lines first.
 ```
 
 Enable and start it:

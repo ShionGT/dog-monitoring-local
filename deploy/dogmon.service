@@ -1,0 +1,20 @@
+[Unit]
+Description=Dog Monitor (Raspberry Pi 5 camera monitoring)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/opt/dogmon
+EnvironmentFile=/opt/dogmon/.env
+ExecStart=/opt/dogmon/.venv/bin/python /opt/dogmon/run.py
+Restart=on-failure
+RestartSec=3
+# Basic hardening
+NoNewPrivileges=true
+ProtectHome=false
+ProtectSystem=full
+
+[Install]
+WantedBy=multi-user.target
