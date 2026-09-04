@@ -37,9 +37,17 @@ class SharedCameraManager:
         with self._lock:
             if self._source.is_running:
                 return
-            self._source.start()
-        logger.info("SharedCameraManager started (source=%s)",
-                    type(self._source).__name__)
+            try:
+                self._source.start()
+            except Exception as exc:  # noqa: BLE001 — source records last_error itself
+                logger.error("Camera start failed (%s): %s", self.source_name, exc)
+            if not self._source.is_running:
+                logger.warning(
+                    "Camera source %s is NOT running after start (%s)",
+                    self.source_name, self.last_error or "unknown error",
+                )
+            else:
+                logger.info("SharedCameraManager started (source=%s)", self.source_name)
 
     def stop(self) -> None:
         with self._lock:
@@ -50,11 +58,26 @@ class SharedCameraManager:
 
     def capture_jpeg(self) -> bytes:
         with self._lock:
-            return self._source.capture_jpeg()
+            try:
+                frame = self._source.capture_jpeg()
+            except Exception as exc:  # noqa: BLE001 — record for /api/health
+                if hasattr(self._source, "last_error"):
+                    self._source.last_error = str(exc)
+                raise
+            return frame
 
     @property
     def is_ready(self) -> bool:
         return self._source.is_running
+
+    @property
+    def last_error(self) -> str:
+        """Last start/capture error from the underlying source ("" if healthy)."""
+        return getattr(self._source, "last_error", "")
+
+    @property
+    def source_name(self) -> str:
+        return type(self._source).__name__
 
     def close(self) -> None:
         self.stop()
@@ -83,6 +106,14 @@ def create_frame_source(mode: str, **kwargs) -> FrameSource:
     if mode in ("mock", "dev", "test"):
         return MockFrameSource(width=width, height=height,
                                 quality=quality, fps=fps)
+    if mode in ("webcam", "usb"):
+        # Lazy import so machines without OpenCV never need it.
+        from .frame_source import WebcamFrameSource
+        return WebcamFrameSource(
+            width=width, height=height,
+            quality=quality, fps=fps,
+            device_index=cam,
+        )
     if mode in ("picamera2", "real", "hardware", "production"):
         # Lazy import so non-Pi machines never need picamera2 installed.
         from .frame_source import Picamera2FrameSource
@@ -92,9 +123,11 @@ def create_frame_source(mode: str, **kwargs) -> FrameSource:
             camera_number=cam,
         )
     if mode == "auto" or mode is None:
-        # Auto-detect: use MockFrameSource if picamera2 unavailable.
+        # Auto-detect: prefer the native Pi camera, then a webcam (OpenCV),
+        # falling back to MockFrameSource so the app always runs.
         try:
             from .frame_source import Picamera2FrameSource
+
             src = Picamera2FrameSource(
                 width=width, height=height,
                 quality=quality, fps=fps,
@@ -103,7 +136,20 @@ def create_frame_source(mode: str, **kwargs) -> FrameSource:
             src.start()
             return src
         except Exception:
-            logger.info("picamera2 unavailable; falling back to MockFrameSource")
-            return MockFrameSource(width=width, height=height,
-                                    quality=quality, fps=fps)
+            logger.info("picamera2 unavailable; trying webcam")
+        try:
+            from .frame_source import WebcamFrameSource
+
+            src = WebcamFrameSource(
+                width=width, height=height,
+                quality=quality, fps=fps,
+                device_index=cam,
+            )
+            src.start()
+            if src.is_running:
+                return src
+        except Exception as exc:  # noqa: BLE001 (e.g. cv2 not installed)
+            logger.info("webcam unavailable (%s); falling back to MockFrameSource", exc)
+        return MockFrameSource(width=width, height=height,
+                                quality=quality, fps=fps)
     raise ValueError(f"Unknown camera mode: {mode!r}")

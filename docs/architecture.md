@@ -139,6 +139,13 @@ module, and it ships with a built-in **debounce** (`bounce=`) and
 * **`MockFrameSource`** — generates a synthetic JPEG (test pattern + timestamp),
   so the live-stream pipeline and the MJPEG encoder can be exercised with no
   camera.
+* **`WebcamFrameSource`** — a USB / built-in webcam via **OpenCV**
+  (AVFoundation on macOS, V4L2 on Linux). This is how a *laptop webcam* feeds
+  the app during development, e.g. pointed at the dog before the Pi hardware
+  exists. Selected with `CAMERA_SOURCE=webcam` (or by `auto`). It is
+  resilient: a failed frame read triggers an automatic reopen, and any start /
+  capture error is recorded in `last_error` (surfaced via `/api/health`) so a
+  permission problem is visible instead of silently black.
 * **`Picamera2FrameSource`** — the real camera on the Pi 5, built on
   **picamera2 / libcamera** (Raspberry Pi OS Bookworm's current camera stack).
 * **`SharedCameraManager`** — a thin wrapper that exposes a *single* frame source
@@ -153,6 +160,16 @@ Raspberry Pi 5. **picamera2** is the current, maintained camera API and is the
 recommended interface for Bookworm and later. All camera access goes through
 `start()`/`stop()` so the camera is *physically stopped* in GREEN (privacy,
 section 13) and never continuously running when not needed.
+
+### macOS camera permission (webcam source)
+
+macOS gates *all* camera access behind a per-app TCC permission. The process
+that launches Python (Terminal, iTerm, the Hermes desktop app, …) must be
+allowed under **System Settings → Privacy & Security → Camera**. The first run
+shows a "… would like to access the camera" dialog; if it is denied, OpenCV
+prints `not authorized to capture video (status 0)` and no device is listed.
+`WebcamFrameSource.start()` records that in `last_error`, and `/api/health →
+camera.last_error` tells you exactly what to fix — the app itself keeps running.
 
 ---
 

@@ -98,6 +98,7 @@ def health():
     sm = g.state_machine
     det = getattr(g, "detection", None)
     viewers = getattr(g, "viewers", None)
+    camera = getattr(g, "camera", None)
     return jsonify(
         {
             "ok": True,
@@ -105,5 +106,10 @@ def health():
             "is_mock": g.dogmon_config.is_mock,
             "viewers": viewers.count() if viewers else 0,
             "detection": det.status() if det and hasattr(det, "status") else None,
+            "camera": {
+                "source": camera.source_name if camera else None,
+                "running": bool(camera.is_ready) if camera else False,
+                "last_error": (camera.last_error or "") if camera else "",
+            },
         }
     )

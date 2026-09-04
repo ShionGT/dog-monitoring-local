@@ -29,7 +29,7 @@ import atexit
 
 from flask import Flask
 
-from .camera import MockFrameSource, SharedCameraManager
+from .camera import SharedCameraManager
 from .config import Config, load_config
 from .detection import (
     DetectionConfig,
@@ -73,28 +73,71 @@ def _build_gpio_backend(config: Config):
 
 
 def _build_frame_source(config: Config):
-    """Return the appropriate frame source (mock or picamera2)."""
-    if config.is_mock or config.mock_cameras:
-        return MockFrameSource(
-            config.camera_width,
-            config.camera_height,
-            fps=max(1, config.camera_fps),
-        )
-    try:
-        from .camera.frame_source import Picamera2FrameSource
+    """Return the appropriate frame source based on ``CAMERA_SOURCE``.
 
-        return Picamera2FrameSource(
+    Selection order:
+      * explicit ``mock`` / ``webcam`` / ``picamera2`` -> that source;
+      * ``auto`` (default) -> picamera2 when we're on a Pi, else webcam
+        if one opens successfully (macOS camera permission permitting),
+        falling back to mock so the app always runs.
+
+    A webcam that fails to open (e.g. macOS camera permission denied)
+    does not crash startup: the error is logged and surfaced via
+    ``/api/health`` (``camera.last_error``) while the app keeps running.
+    """
+    from .camera.frame_source import MockFrameSource, Picamera2FrameSource
+
+    fps = max(1, config.camera_fps)
+    mock = MockFrameSource(config.camera_width, config.camera_height, fps=fps)
+
+    def _webcam():
+        from .camera.frame_source import WebcamFrameSource
+
+        return WebcamFrameSource(
             config.camera_width,
             config.camera_height,
-            fps=max(1, config.camera_fps),
+            fps=fps,
+            device_index=config.webcam_device_index,
         )
-    except Exception as exc:  # noqa: BLE001
-        log.warning("picamera2 unavailable (%s); falling back to mock camera.", exc)
-        return MockFrameSource(
-            config.camera_width,
-            config.camera_height,
-            fps=max(1, config.camera_fps),
-        )
+
+    def _picamera2():
+        try:
+            return Picamera2FrameSource(
+                config.camera_width,
+                config.camera_height,
+                fps=fps,
+            )
+        except Exception as exc:  # noqa: BLE001 (e.g. picamera2 not installed)
+            log.warning("picamera2 unavailable (%s)", exc)
+            return None
+
+    source_name = config.camera_source or "auto"
+
+    if source_name == "mock":
+        return mock
+    if source_name == "webcam":
+        src = _webcam()
+        src.start()  # primes the pipeline; permission errors land in last_error
+        return src if src.is_running else mock
+    if source_name == "picamera2":
+        src = _picamera2() or mock
+        return src
+
+    # auto: prefer the native camera for this platform, then webcam, then mock.
+    if not config.is_mock:  # on a Pi (hardware mode)
+        src = _picamera2()
+        if src is not None:
+            return src
+    # Non-Pi (or picamera2 unavailable): try the webcam.
+    cam = _webcam()
+    cam.start()
+    if cam.is_running:
+        return cam
+    log.warning(
+        "No usable camera (webcam error: %s); falling back to mock feed.",
+        cam.last_error or "unknown",
+    )
+    return mock
 
 
 def _build_notifier(config: Config):

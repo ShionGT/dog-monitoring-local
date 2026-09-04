@@ -26,6 +26,8 @@ class FrameSource(abc.ABC):
         self.quality = quality
         self.fps = fps
         self.running = False
+        #: Last start/capture error, if any (surfaced via /api/health).
+        self.last_error: str = ""
 
     @abc.abstractmethod
     def start(self) -> None:
@@ -110,6 +112,112 @@ class MockFrameSource(FrameSource):
         return buf.getvalue()
 
 
+class WebcamFrameSource(FrameSource):
+    """USB / built-in webcam via OpenCV (AVFoundation on macOS, V4L2 on Linux).
+
+    This is the source to use when a *laptop webcam* (e.g. on your Mac)
+    should feed the app instead of a Pi camera or the mock pattern.
+
+    macOS note: OpenCV needs **camera permission** for the process that
+    launches it (Terminal / iTerm / Python). The first time you start the
+    app, macOS shows a "… would like to access the camera" dialog — click
+    **Allow**. If you clicked *Don't Allow* (or the permission was denied),
+    macOS silently refuses and OpenCV prints::
+
+        OpenCV: not authorized to capture video (status 0)
+
+    Fix it in **System Settings → Privacy & Security → Camera** by
+    toggling the entry for your terminal app, then restart the app.
+
+    The source is resilient: if a frame read fails (camera unplugged,
+    permission revoked), it logs the error once and retries on subsequent
+    captures instead of crashing the stream.
+    """
+
+    def __init__(self, width: int = 1280, height: int = 720,
+                    quality: int = 80, fps: int = 5,
+                    device_index: int = 0):
+        super().__init__(width, height, quality, fps)
+        self._device_index = device_index
+        self._cap = None
+
+    def _open(self):
+        import cv2
+        cap = cv2.VideoCapture(self._device_index)
+        if not cap.isOpened():
+            raise RuntimeError(
+                f"Could not open webcam device {self._device_index}. "
+                "On macOS this usually means the app running Python has not "
+                "been granted Camera permission: System Settings → Privacy & "
+                "Security → Camera → allow your terminal app, then restart."
+            )
+        cap.set(cv2.CAP_PROP_FRAME_WIDTH, self.width)
+        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.height)
+        return cap
+
+    def start(self) -> None:
+        try:
+            self._cap = self._open()
+            # Prime the pipeline so a permission problem surfaces now, not mid-stream.
+            ok, _ = self._cap.read()
+            if not ok:
+                raise RuntimeError(
+                    "Webcam opened but produced no frames — on macOS check "
+                    "System Settings → Privacy & Security → Camera."
+                )
+            self.last_error = ""
+            self.running = True
+            logger.info(
+                "WebcamFrameSource started (device=%d, %dx%d q=%d fps=%d)",
+                self._device_index, self.width, self.height,
+                self.quality, self.fps,
+            )
+        except Exception as exc:  # noqa: BLE001 — surface via last_error, don't crash the app
+            self.last_error = str(exc)
+            logger.error("WebcamFrameSource failed to start: %s", exc)
+
+    def stop(self) -> None:
+        if self._cap is not None:
+            try:
+                self._cap.release()
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("Error releasing webcam capture: %s", exc)
+            self._cap = None
+        self.running = False
+        logger.info("WebcamFrameSource stopped")
+
+    def capture_jpeg(self) -> bytes:
+        if self._cap is None or not self.running:
+            raise RuntimeError(
+                f"Webcam is not running ({self.last_error or 'not started'})"
+            )
+        ok, frame = self._cap.read()
+        if not ok or frame is None:
+            # Camera may have been unplugged / permission revoked — try to recover.
+            logger.warning("Webcam frame read failed (%s); attempting reopen", self.last_error or "no data")
+            try:
+                self._cap.release()
+            except Exception:  # noqa: BLE001
+                pass
+            self._cap = None
+            try:
+                self._cap = self._open()
+                ok, frame = self._cap.read()
+            except Exception as exc:  # noqa: BLE001
+                self.last_error = str(exc)
+            if not ok or frame is None:
+                raise RuntimeError(
+                    f"Webcam capture failed ({self.last_error or 'no frame data'})"
+                )
+        import cv2 as _cv2
+
+        encode_params = [int(_cv2.IMWRITE_JPEG_QUALITY), int(self.quality)]
+        ok, buf = _cv2.imencode(".jpg", frame, encode_params)
+        if not ok:
+            raise RuntimeError("Webcam JPEG encoding failed")
+        return buf.tobytes()
+
+
 class Picamera2FrameSource(FrameSource):
     """libcamera / Picamera2 JPEG source for Raspberry Pi 5."""
 
@@ -130,6 +238,8 @@ class Picamera2FrameSource(FrameSource):
             self._cam.configure("still",
                                 size=(self.width, self.height),
                                 quality=self.quality)
+            self._cam.start()  # keep the sensor running; capture_still is non-blocking-ish
+            self.last_error = ""
             self.running = True
             logger.info("Picamera2FrameSource started (%dx%d q=%d)",
                         self.width, self.height, self.quality)
@@ -156,17 +266,12 @@ class Picamera2FrameSource(FrameSource):
         if self._cam is None or not self.running:
             raise RuntimeError("Camera is not running")
         try:
-            import io as _io
-            self._cam.start()
-            self._cam.wait(1.0 / max(self.fps, 1))
-            self._cam.stop_and_save(
-                file=_io.BytesIO(),
-                format="jpeg",
-                quality=self.quality,
+            stream = self._cam.capture_still(
+                format="jpeg", quality=self.quality,
             )
-            self._last_bytes = self._cam._jpeg_stream.getvalue()
+            if stream is None:
+                raise RuntimeError("picamera2 capture returned no data")
+            self._last_bytes = stream.getvalue() if hasattr(stream, "getvalue") else bytes(stream)
             return self._last_bytes
-        except Exception as exc:
-            raise RuntimeError(
-                f"picamera2 capture failed: {exc}"
-            ) from exc
+        except Exception as exc:  # noqa: BLE001
+            raise RuntimeError(f"picamera2 capture failed: {exc}") from exc

@@ -99,6 +99,17 @@ Then open <http://127.0.0.1:8080> in your browser.
 > test-pattern feed. You can force it explicitly with
 > `PLATFORM=mock python run.py`.
 
+**Using your laptop's webcam instead of the mock feed:** set
+`CAMERA_SOURCE=webcam` (or leave `auto`, which tries the webcam when no Pi
+camera is present). On macOS, allow camera access for whatever app runs Python:
+
+1. Run the app once — macOS shows a *"… would like to access the camera"*
+   dialog → click **Allow**.
+2. If you clicked *Don't Allow* (or see a black feed), open **System
+   Settings → Privacy & Security → Camera**, enable the toggle for your
+   terminal app, and restart. The exact problem is reported at
+   `GET /api/health` → `camera.last_error`.
+
 Run the test suite (it needs no hardware):
 
 ```bash
@@ -131,6 +142,8 @@ All configuration is via environment variables (or a `.env` file).
 | Variable | Default | Purpose |
 |----------|---------|---------|
 | `PLATFORM` | `auto` | `auto` \| `mock` \| `hardware` — which backend to use |
+| `CAMERA_SOURCE` | `auto` | `auto` \| `mock` \| `webcam` (OpenCV) \| `picamera2` — which camera feeds the app |
+| `WEBCAM_DEVICE_INDEX` | `0` | OpenCV device index for the webcam source (0 = default camera) |
 | `STARTUP_STATE` | `GREEN` | Initial state (privacy-safe = camera off) |
 | `ADMIN_USERNAME` / `ADMIN_PASSWORD` | *(empty)* | Web login credentials |
 | `AUTH_ENABLED` | `1` | `0` to disable auth in dev (not recommended) |

@@ -120,6 +120,16 @@ class Config:
     platform_mode: str = "auto"            # 'auto' | 'mock' | 'hardware'
     mock_cameras: bool = True             # if True, use simulated frames
 
+    # --- camera source selection ------------------------------------------
+    # 'auto'      = pick the best available: picamera2 on a Pi, webcam
+    #               (OpenCV) when one is present and permitted, else mock.
+    # 'mock'      = synthetic test-pattern frames (dev / CI).
+    # 'webcam'    = USB/built-in camera via OpenCV (AVFoundation on macOS,
+    #               V4L2 on Linux). Requires camera permission on macOS.
+    # 'picamera2' = Raspberry Pi camera via libcamera (Pi only).
+    camera_source: str = "auto"
+    webcam_device_index: int = 0           # OpenCV device index for 'webcam'
+
     # --- GPIO pin assignment (BCM numbering) ---
     red_led_pin: int = DEFAULT_RED_LED_PIN
     yellow_led_pin: int = DEFAULT_YELLOW_LED_PIN
@@ -225,6 +235,8 @@ def load_config(env: "Optional[dict[str, str]]" = None, *, path: Optional[str] =
         c.auth_enabled = _as_bool(os.environ.get("AUTH_ENABLED"), True)
         c.platform_mode = _detect_platform()
         c.mock_cameras = _as_bool(os.environ.get("USE_MOCK_CAMERA"), True)
+        c.camera_source = (os.environ.get("CAMERA_SOURCE", "auto") or "auto").strip().lower()
+        c.webcam_device_index = _as_int(os.environ.get("WEBCAM_DEVICE_INDEX"), 0)
         c.red_led_pin = _as_int(os.environ.get("RED_LED_PIN"), DEFAULT_RED_LED_PIN)
         c.yellow_led_pin = _as_int(os.environ.get("YELLOW_LED_PIN"), DEFAULT_YELLOW_LED_PIN)
         c.green_led_pin = _as_int(os.environ.get("GREEN_LED_PIN"), DEFAULT_GREEN_LED_PIN)
