@@ -119,8 +119,12 @@ def live_mjpeg():
 
     return Response(
         _mjpeg_gen(viewer_id, state_machine, camera, viewers),
-        mimetype="multipart/x-mixed-replace",
         headers={
+            # Set the Content-Type ONLY here, WITH the boundary — browsers
+            # cannot parse multipart/x-mixed-replace without it (the <img>
+            # renders nothing and the connection is dropped). Do NOT also
+            # pass mimetype= to Response, or Flask's default would win and
+            # strip the boundary.
             "Content-Type": _CONTENT_TYPE,
             "Cache-Control": "no-cache, no-store, must-revalidate",
         },

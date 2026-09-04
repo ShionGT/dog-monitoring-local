@@ -100,6 +100,25 @@ body       { font-family: var(--font); background: var(--bg); color: var(--text)
 .info     { display: grid; grid-template-columns: 1fr 1.5fr; gap: 0.4rem; font-size: 0.9rem; }
 .info dt  { color: var(--muted); }
 .info dd  { font-weight: 600; }
+.state-desc { margin-top: 0.8rem; padding-top: 0.8rem; border-top: 1px solid var(--border);
+             font-size: 0.85rem; color: var(--muted); line-height: 1.4; }
+
+/* Small screens / narrow windows: keep everything usable down to ~360px */
+@media (max-width: 768px) {
+  .app      { padding: 0 0.75rem 1.5rem; }
+  .app__header { gap: 0.6rem; padding: 0.9rem 0; }
+  .app__title   { font-size: 1.05rem; }
+  .layout  { gap: 1rem; margin-top: 1rem; }
+  .feed__frame { aspect-ratio: 4/3; }
+  .feed__msg { font-size: 1.25rem; }
+  .panel__block { padding: 0.75rem; }
+  .btn     { padding: 0.85rem 1rem; font-size: 0.95rem; } /* larger tap targets */
+}
+@media (max-width: 480px) {
+  .app__logout { font-size: 0.8rem; }
+  .info    { font-size: 0.85rem; }
+  .feed__status { flex-wrap: wrap; gap: 0.4rem; font-size: 0.8rem; }
+}
 
 /* Login / error page */
 .login-card, .error-card { background: var(--surface); border: 1px solid var(--border);

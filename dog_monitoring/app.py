@@ -275,11 +275,17 @@ def create_app(config: Config | None = None) -> Flask:
         # Power the camera to match the state (spec section 6/13).
         _ensure_camera_for_state(change.new)
         # Notify the web UI of the new state (spec section 10).
-        bus.publish(
-            change.to_dict() if hasattr(change, "to_dict")
-            else {"state": change.new.name, "source": change.source},
-            event="state_change",
+        # The payload mirrors StateMachine.snapshot() so the frontend's
+        # onStateChanged() can read `state`, `label`, `description`, and
+        # `last_change` from *every* notification source (button, another
+        # device, viewer registry) — not just direct button clicks.
+        payload = change.to_dict() if hasattr(change, "to_dict") else {}
+        payload.setdefault("state", change.new.name)
+        payload["label"] = getattr(change, "label", payload.get("label", change.new.name))
+        payload["description"] = getattr(
+            change, "description", payload.get("description", "")
         )
+        bus.publish(payload, event="state_change")
 
     sm.add_listener(_on_state_change)
     # Apply the initial state immediately (the listener above already fired

@@ -109,7 +109,8 @@
                               <dd id="lastChange">{{ '—' if monitoring_state.last_change is none else '—' }}</dd>
                               <dt>Source</dt>
                               <dd id="lastSource">{{ '—' if monitoring_state.last_change is none else 'web' }}</dd>
-                         </dl>
+                              </dl>
+                              <p class="state-desc" id="stateDesc">{{ monitoring_state.description }}</p>
                     </section>
                </aside>
           </main>
