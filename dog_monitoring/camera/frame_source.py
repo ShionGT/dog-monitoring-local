@@ -158,12 +158,23 @@ class WebcamFrameSource(FrameSource):
     def start(self) -> None:
         try:
             self._cap = self._open()
-            # Prime the pipeline so a permission problem surfaces now, not mid-stream.
-            ok, _ = self._cap.read()
+            # Prime the pipeline: V4L2/AVFoundation USB webcams frequently
+            # fail the first read() while the sensor warms up, so retry a
+            # few times before declaring failure (macOS permission failures
+            # fail every read, so they are still detected).
+            ok = False
+            for _ in range(5):
+                ok, _frame = self._cap.read()
+                if ok and _frame is not None:
+                    break
+                time.sleep(0.2)
             if not ok:
+                self._cap.release()
+                self._cap = None
                 raise RuntimeError(
                     "Webcam opened but produced no frames — on macOS check "
-                    "System Settings → Privacy & Security → Camera."
+                    "System Settings → Privacy & Security → Camera; on a Pi "
+                    "check `ls /dev/video*` and the USB connection."
                 )
             self.last_error = ""
             self.running = True
@@ -219,7 +230,13 @@ class WebcamFrameSource(FrameSource):
 
 
 class Picamera2FrameSource(FrameSource):
-    """libcamera / Picamera2 JPEG source for Raspberry Pi 5."""
+    """libcamera / Picamera2 JPEG source for a Raspberry Pi camera module.
+
+    Uses a **video configuration with an RGB888 main stream** so
+    ``capture_array()`` can be called repeatedly from the MJPEG stream loop.
+    (Still captures via ``capture_file`` reconfigure the camera per shot and
+    are far too slow for a live feed.)
+    """
 
     def __init__(self, width: int = 1280, height: int = 720,
                     quality: int = 80, fps: int = 5,
@@ -227,36 +244,50 @@ class Picamera2FrameSource(FrameSource):
         super().__init__(width, height, quality, fps)
         self._cam_number = camera_number
         self._cam = None
-        self._last_bytes = b""
 
     def start(self) -> None:
         try:
-            import gc
             from picamera2 import Picamera2
-            gc.collect()
-            self._cam = Picamera2(self._cam_number)
-            self._cam.configure("still",
-                                size=(self.width, self.height),
-                                quality=self.quality)
-            self._cam.start()  # keep the sensor running; capture_still is non-blocking-ish
-            self.last_error = ""
-            self.running = True
-            logger.info("Picamera2FrameSource started (%dx%d q=%d)",
-                        self.width, self.height, self.quality)
         except ImportError as exc:
             raise RuntimeError(
-                "picamera2 is not installed; install it on the Pi: pip install picamera2"
+                "picamera2 is not installed; install it on the Pi: "
+                "sudo apt install python3-picamera2"
             ) from exc
-        except OSError as exc:
-            raise RuntimeError(
-                f"Failed to open camera: {exc}"
-            ) from exc
+        try:
+            import gc
+
+            gc.collect()
+            cam = Picamera2(self._cam_number)
+            video_config = cam.create_video_configuration(
+                main={
+                    "size": (self.width, self.height),
+                    "format": "RGB888",
+                }
+            )
+            cam.configure(video_config)
+            cam.start()
+            # Warm up: the first frame(s) are typically dark/blank.
+            for _ in range(3):
+                cam.capture_array()
+            self._cam = cam
+            self.last_error = ""
+            self.running = True
+            logger.info("Picamera2FrameSource started (%dx%d q=%d fps=%d)",
+                        self.width, self.height, self.quality, self.fps)
+        except Exception as exc:  # noqa: BLE001
+            self.last_error = str(exc)
+            logger.error("Picamera2FrameSource failed to start: %s", exc)
+            raise
 
     def stop(self) -> None:
         if self._cam is not None:
             try:
+                self._cam.stop()
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("Error stopping picamera2: %s", exc)
+            try:
                 self._cam.close()
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
                 logger.warning("Error closing picamera2: %s", exc)
             self._cam = None
         self.running = False
@@ -266,12 +297,15 @@ class Picamera2FrameSource(FrameSource):
         if self._cam is None or not self.running:
             raise RuntimeError("Camera is not running")
         try:
-            stream = self._cam.capture_still(
-                format="jpeg", quality=self.quality,
-            )
-            if stream is None:
-                raise RuntimeError("picamera2 capture returned no data")
-            self._last_bytes = stream.getvalue() if hasattr(stream, "getvalue") else bytes(stream)
-            return self._last_bytes
+            import cv2
+
+            array = self._cam.capture_array()  # RGB888 HxWx3
+            ok, buf = cv2.imencode(".jpg", array,
+                                    [int(cv2.IMWRITE_JPEG_QUALITY), int(self.quality)])
+            if not ok:
+                raise RuntimeError("picamera2 JPEG encoding failed")
+            return buf.tobytes()
         except Exception as exc:  # noqa: BLE001
+            self.last_error = str(exc)
             raise RuntimeError(f"picamera2 capture failed: {exc}") from exc
+

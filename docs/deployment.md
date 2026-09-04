@@ -51,8 +51,12 @@ python -m pip install --upgrade pip
 pip install -r requirements.txt       # runtime deps (Flask, Pillow, gpiozero, picamera2)
 ```
 
-> On the Pi, `PLATFORM=auto` will detect the ARM + `/dev/gpiochip0` and use
-> the **hardware** backend. You can force it with `export PLATFORM=hardware`.
+> On the Pi, `PLATFORM=auto` detects Linux + ARM/`aarch64` + a `/dev/gpiochip*`
+> device (the Pi 5 exposes `/dev/gpiochip4` via RP1) and uses the **hardware**
+> backend. You can force it with `export PLATFORM=hardware`.
+> **Install `gpiozero` with `sudo apt install python3-gpiozero` or via pip —**
+> without it the app logs `Hardware GPIO backend unavailable` and falls back
+> to mock GPIO (LEDs will not light).
 
 ---
 

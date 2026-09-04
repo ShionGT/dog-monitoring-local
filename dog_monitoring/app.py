@@ -26,6 +26,7 @@ the last viewer leaves it demotes to YELLOW (section 14).
 from __future__ import annotations
 
 import atexit
+import os
 
 from flask import Flask
 
@@ -120,14 +121,30 @@ def _build_frame_source(config: Config):
         src.start()  # primes the pipeline; permission errors land in last_error
         return src if src.is_running else mock
     if source_name == "picamera2":
-        src = _picamera2() or mock
-        return src
+        src = _picamera2()
+        return src if src is not None else mock
 
-    # auto: prefer the native camera for this platform, then webcam, then mock.
+    # auto:
+    # An explicit USE_MOCK_CAMERA=1 forces the synthetic feed (dev/testing)
+    # without turning the GPIO layer mock — the LEDs stay real.
+    if config.mock_cameras and "USE_MOCK_CAMERA" in os.environ:
+        return mock
+
+    # Prefer the native camera for this platform, then webcam, then mock.
     if not config.is_mock:  # on a Pi (hardware mode)
         src = _picamera2()
         if src is not None:
-            return src
+            try:
+                src.start()  # actually probe: no CSI camera -> fails here
+            except Exception as exc:  # noqa: BLE001
+                log.warning("Pi camera module unavailable (%s); trying webcam", exc)
+            else:
+                if src.is_running:
+                    return src
+            try:
+                src.stop()
+            except Exception:  # noqa: BLE001
+                pass
     # Non-Pi (or picamera2 unavailable): try the webcam.
     cam = _webcam()
     cam.start()
@@ -136,6 +153,12 @@ def _build_frame_source(config: Config):
     log.warning(
         "No usable camera (webcam error: %s); falling back to mock feed.",
         cam.last_error or "unknown",
+    )
+    # Carry the failure reason into the mock so /api/health can explain why
+    # the feed is synthetic instead of silently showing a test pattern.
+    mock.last_error = (
+        f"No real camera available; serving synthetic feed. "
+        f"Last camera error: {cam.last_error or 'unknown'}"
     )
     return mock
 

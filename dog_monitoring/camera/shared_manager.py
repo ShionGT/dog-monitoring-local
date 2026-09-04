@@ -134,7 +134,9 @@ def create_frame_source(mode: str, **kwargs) -> FrameSource:
                 camera_number=cam,
             )
             src.start()
-            return src
+            if src.is_running:
+                return src
+            src.stop()
         except Exception:
             logger.info("picamera2 unavailable; trying webcam")
         try:

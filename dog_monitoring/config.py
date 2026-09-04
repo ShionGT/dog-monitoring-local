@@ -190,12 +190,31 @@ class Config:
         return self._resolved_is_mock
 
 
+def _has_gpiochips() -> bool:
+    """True if any Linux GPIO character device exists.
+
+    The Pi 4 and earlier expose ``/dev/gpiochip0``; the Pi 5's RP1 south
+    bridge exposes the GPIOs as ``/dev/gpiochip4``. Accepting *any*
+    ``gpiochip*`` keeps the check correct across models.
+    """
+    import glob
+
+    return bool(glob.glob("/dev/gpiochip*"))
+
+
 def _detect_platform() -> str:
     """Decide platform backend without third-party imports.
 
     Real hardware is only assumed when we appear to be *on* a Raspberry-Pi-like
-    machine (ARM Linux with ``/dev/gpiochip0``). Everything else (macOS, x86 CI)
-    resolves to mock so the app runs everywhere.
+    machine (Linux on ARM — including ``aarch64``, which is what a Pi 5 with
+    the standard 64-bit Raspberry Pi OS reports — with GPIO character devices
+    present). Everything else (macOS, x86 CI) resolves to mock so the app
+    runs everywhere.
+
+    Note: the check used to require ``machine.startswith("arm")`` and
+    ``/dev/gpiochip0`` specifically, which silently mis-detected every Pi 5
+    (aarch64 + /dev/gpiochip4) as a mock platform — the LEDs were then driven
+    by MockGpioBackend and never lit.
     """
     mode = os.environ.get("PLATFORM", "auto").strip().lower()
     if mode in {"mock", "hardware"}:
@@ -205,8 +224,8 @@ def _detect_platform() -> str:
     machine = platform.machine().lower()
     on_pi = (
         system == "Linux"
-        and machine.startswith("arm")
-        and os.path.exists("/dev/gpiochip0")
+        and (machine.startswith("arm") or machine == "aarch64")
+        and _has_gpiochips()
     )
     return "hardware" if on_pi else "mock"
 
@@ -268,13 +287,17 @@ def load_config(env: "Optional[dict[str, str]]" = None, *, path: Optional[str] =
         c.require_https_in_prod = _as_bool(os.environ.get("REQUIRE_HTTPS_IN_PROD"), c.require_https_in_prod)
         c.data_dir = os.environ.get("DATA_DIR", c.data_dir)
 
-        # Resolve the mock flag: forced by platform mode, else by mock_cameras.
+        # Resolve the mock flag:
+        #   * forced by platform mode (mock -> True, hardware -> False);
+        #   * in auto mode, USE_MOCK_CAMERA only controls the *camera* (see
+        #     app._build_frame_source), never the GPIO layer — the LEDs must
+        #     keep working on real hardware even when a mock feed is forced.
         if c.platform_mode == "mock":
             c._resolved_is_mock = True
         elif c.platform_mode == "hardware":
             c._resolved_is_mock = False
         else:  # auto
-            c._resolved_is_mock = c.mock_cameras
+            c._resolved_is_mock = False
         return c
     finally:
         # Restore the environment: tests must not mutate the real os.environ.
