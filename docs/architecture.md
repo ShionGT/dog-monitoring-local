@@ -53,8 +53,8 @@ Everything in this design follows that. In particular:
                         │          │ add_listener(…)            │
                         │     ┌────┴─────┬──────────┬─────────┐│
                         │     ▼          ▼          ▼          ▼│
-   GPIO Zero ◀───   LED Ctrl   Button Ctrl  SSE bus  Camera    │
-  (gpiozero)      (set LED)  (cycle state) (pub/sub) (FrameSrc) │
+   RPi.GPIO ◀───   LED Ctrl   Button Ctrl  SSE bus  Camera     │
+ (rpi-lgpio)      (set LED)  (cycle state) (pub/sub) (FrameSrc) │
                           │                                 │     │
                           │        ┌──────────────────────┘     │
                           │        ▼                             │
@@ -113,20 +113,25 @@ state is a no-op that returns an idempotent `StateChange`.)
 * **`MockGpioBackend`** — an in-memory implementation for Mac/CI. It tracks LED
   state in a dict and lets tests *simulate* a button press
   (`press_button()`), so button behaviour is testable with no hardware.
-* **`HardwareGpioBackend`** — a GPIO Zero implementation (LED + Button objects)
-  for the real Pi 5. It is only importable where `gpiozero` is installed; on a
-  laptop `create_gpio_backend` catches the `ImportError`/`RuntimeError` and falls
-  back to mock.
+* **`HardwareGpioBackend`** — an RPi.GPIO implementation (LED outputs + a
+  debounced button input) for the real Pi 5. It is only importable where an
+  `RPi.GPIO` module exists (on the Pi that is **rpi-lgpio**); on a laptop
+  `create_gpio_backend` catches the `ImportError`/`RuntimeError` and falls back
+  to mock.
 * **`LedController`** — maps a `MonitoringState` to "turn on the matching LED,
   turn the others off.", so the physical LEDs always agree with the state.
 * **`ButtonController`** — wraps the backend's button callback and turns a
   (debounced) press into a `state_machine.cycle()` call.
 
-### Why GPIO Zero
+### Why RPi.GPIO (via rpi-lgpio)
 
-GPIO Zero is the modern, well-documented successor to the legacy `RPi.GPIO`
-module, and it ships with a built-in **debounce** (`bounce=`) and
-**hold** handling, which is exactly what a physical push button needs.
+The *original* `RPi.GPIO` package does **not** work on the Raspberry Pi 5
+(its direct `/dev/mem` register access can't reach the RP1 south-bridge's
+`/dev/gpiochip4`). This project therefore uses **rpi-lgpio**, a drop-in
+replacement that provides the same `RPi.GPIO` API backed by Linux gpiod —
+which **does** work on the Pi 5. RPi.GPIO also gives us a built-in
+**debounce** (`bouncetime`) on `add_event_detect`, exactly what a physical
+push button needs.
 
 ---
 

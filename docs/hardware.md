@@ -2,11 +2,23 @@
 
 This document covers the physical hardware: the **3 LEDs**, the **1 push
 button**, and the **camera**, wired to a **Raspberry Pi 5** and driven through
-**GPIO Zero** (LEDs + button) and **picamera2 / libcamera** (camera).
+**RPi.GPIO** (LEDs + button) and **picamera2 / libcamera** (camera).
 
 > **All GPIO pins use BCM numbering** (e.g. "pin 17" = GPIO17 in the BCM
 > scheme), *not* the physical pin number on the 40-pin header. This is the
-> convention GPIO Zero and the spec both use.
+> convention RPi.GPIO and the spec both use (the app calls `GPIO.setmode(BCM)`).
+
+> **Why RPi.GPIO, and which package?** The *original* `RPi.GPIO` package does
+> **not** work on the Raspberry Pi 5: it talks to the SoC's GPIO registers
+> directly via `/dev/mem`, but on the Pi 5 those live in the RP1 south-bridge
+> (exposed as `/dev/gpiochip4`), which that access path cannot reach. Instead
+> this project uses **rpi-lgpio** — a drop-in replacement that provides the
+> *same* `RPi.GPIO` API backed by Linux gpiod/lgpio, which **does** work on the
+> Pi 5. Install it with `pip install rpi-lgpio` (or `sudo apt
+> install python3-rpi-lgpio`). Do **not** also install the original `RPi.GPIO`
+> package — both provide a module named `RPi.GPIO`, and the original one will
+> shadow it. The app imports lazily, so on a laptop/CI (mock mode) neither is
+> required.
 
 ---
 
@@ -100,9 +112,8 @@ GPIO17 (e.g.)
 
 - **Press** → GPIO driven LOW (button closes the circuit to GND).
 - **Release** → pull-up drives GPIO HIGH again.
-- **Debounce** is handled by GPIO Zero's `bounce=` parameter (default 0.05 s)
-  so a single physical press is **never** treated as multiple presses
-   (spec section 4).
+- **Debounce** is handled by RPi.GPIO's `bouncetime` (set to 50 ms) so a
+  single physical press is **never** treated as multiple presses (spec section 4).
 
 When pressed, the button triggers `state_machine.cycle()`, which advances the
 state `GREEN → YELLOW → RED → GREEN`.
@@ -193,4 +204,6 @@ development.
 - [ ] **Pins verified** against the current Pi 5 pinout (no conflict with the
      camera connector or other hardware).
 - [ ] **No 5 V logic** is connected to a 3.3 V GPIO without a level shifter.
-- [ ] **Button is debounced** (GPIO Zero `bounce=`, default 0.05 s — already set).
+- [ ] **Button is debounced** (RPi.GPIO `bouncetime` 50 ms — already set).
+- [ ] **rpi-lgpio installed** on the Pi (`pip install rpi-lgpio`) — *not* the
+     original `RPi.GPIO` package (see note in section 1).

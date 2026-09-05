@@ -65,8 +65,9 @@ the Raspberry Pi 5 with minimal code changes when the hardware is available.
 * **`picamera2` (libcamera) on Raspberry Pi OS Bookworm** is the current
   camera stack; `picamera` (the old v1) is deprecated. See
   [docs/hardware.md](docs/hardware.md).
-* **GPIO Zero** for the LEDs and button — simple, well-documented, and it
-  handles debouncing for the button.
+* **RPi.GPIO** (via **rpi-lgpio**) for the LEDs and button — the original
+  `RPi.GPIO` package doesn't work on the Pi 5, but rpi-lgpio provides the same
+  API backed by gpiod, and it handles button debouncing.
 
 ---
 
@@ -166,7 +167,7 @@ All configuration is via environment variables (or a `.env` file).
 ```
 dog-monitoring/
 ├── run.py                  # entry point (loads config, validates, runs)
-├── requirements.txt        # runtime deps (Flask, Pillow, gpiozero, picamera2)
+├── requirements.txt        # runtime deps (Flask, Pillow, rpi-lgpio, picamera2)
 ├── requirements-dev.txt    # + pytest
 ├── .env.example            # documented, safe example config (copy to .env)
 ├── .gitignore
@@ -181,7 +182,7 @@ dog-monitoring/
 │   ├── sse.py              # SSE pub/sub bus
 │   │
 │   ├── state/              # MonitoringState enum + MonitorStateMachine
-│   ├── hardware/           # GpioBackend (mock + GPIO Zero), LED + button
+│   ├── hardware/           # GpioBackend (mock + RPi.GPIO), LED + button
 │   ├── camera/             # FrameSource (mock + Picamera2) + SharedCameraManager
 │   ├── detection/          # motion, pet detector, Discord notifier, engine
 │   │
@@ -211,7 +212,7 @@ dog-monitoring/
               ┌────────┼─────────┼────────┐       │
               ▼        ▼         ▼        ▼       │
            Camera    GPIO      Detection  SSE    │
-         (Picamera2)(GPIO Zero) (background thread)→ web UI
+         (Picamera2)(RPi.GPIO)  (background thread)→ web UI
                        └───▶ LEDs        └───▶ Discord (cooldown)
 ```
 

@@ -32,7 +32,7 @@ class LedPin:
 class ButtonPin:
     """A single push-button pin configuration.
 
-    ``pull_up`` mirrors GPIO Zero's ``pull_up`` parameter. ``True`` means the
+    ``pull_up`` mirrors RPi.GPIO's pull-up configuration. ``True`` means the
     pin is pulled *high* and the button pulls it *low* when pressed (the common
     wiring). ``False`` is the inverse (pull down, button pulls high).
     """

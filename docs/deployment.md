@@ -48,15 +48,18 @@ cd /opt/dogmon
 python3 -m venv /opt/dogmon/.venv
 source /opt/dogmon/.venv/bin/activate
 python -m pip install --upgrade pip
-pip install -r requirements.txt       # runtime deps (Flask, Pillow, gpiozero, picamera2)
+pip install -r requirements.txt       # runtime deps (Flask, Pillow, rpi-lgpio, picamera2)
 ```
 
 > On the Pi, `PLATFORM=auto` detects Linux + ARM/`aarch64` + a `/dev/gpiochip*`
 > device (the Pi 5 exposes `/dev/gpiochip4` via RP1) and uses the **hardware**
 > backend. You can force it with `export PLATFORM=hardware`.
-> **Install `gpiozero` with `sudo apt install python3-gpiozero` or via pip —**
-> without it the app logs `Hardware GPIO backend unavailable` and falls back
-> to mock GPIO (LEDs will not light).
+> **Install `rpi-lgpio` with `pip install rpi-lgpio` (or `sudo apt
+> install python3-rpi-lgpio`) —** it provides the `RPi.GPIO` module backed by
+> gpiod, which works on the Pi 5. Do **not** install the original `RPi.GPIO`
+> package (it doesn't work on the Pi 5 and would shadow it). Without an
+> `RPi.GPIO` module the app logs `Hardware GPIO backend unavailable` and falls
+> back to mock GPIO (LEDs will not light).
 
 ---
 
@@ -103,7 +106,7 @@ against a current Pi 5 pinout before power-on** (see `hardware.md` §1).
 ## 5. Dependency installation
 
 `pip install -r requirements.txt` installs everything (section 2). The
-**hardware** deps (`gpiozero`, `picamera2`) are only imported when
+**hardware** deps (`rpi-lgpio`, `picamera2`) are only imported when
 `PLATFORM=hardware`, so on a laptop/CI (mock mode) they are **not** needed.
 
 ---

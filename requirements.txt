@@ -7,7 +7,7 @@ requests>=2.28
 # --- Raspberry Pi 5 hardware backends (only needed on the Pi) ---
 # These are imported lazily inside the hardware/camera modules, so on a
 # laptop or in CI (mock mode) they are never imported and the app runs fine.
-gpiozero>=2.0
+rpi-lgpio>=0.6        # provides RPi.GPIO backed by gpiod/lgpio (works on Pi 5)
 picamera2>=0.3.2
 
 # --- Webcam support (macOS / Linux USB cameras via OpenCV) ---

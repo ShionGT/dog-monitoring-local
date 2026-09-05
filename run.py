@@ -89,7 +89,7 @@ def main() -> int:
 
     _validate_production(config)
 
-    # Import lazily so a missing optional dependency (picamera2/gpiozero in
+    # Import lazily so a missing optional dependency (picamera2/rpi-lgpio in
     # hardware mode) surfaces as a clear, actionable error instead of an
     # import-time crash before we've printed our banner.
     try:
